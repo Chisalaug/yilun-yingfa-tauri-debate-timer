@@ -33,6 +33,45 @@ const DEFAULT_FORMAT = {
   phases: [{ id: 'free', name: '自由辩论', seconds: { pro: 180, con: 180 } }],
 };
 
+/**
+ * 内置赛制预设：从「选择赛制」下拉直接加载，无需导入 JSON。
+ * 结构与自定义 JSON 的 phases 数组一致，seconds 支持 number 或 { pro, con }；
+ * 想调整环节，直接改这里即可。
+ */
+const FORMAT_PRESETS = {
+  standard: {
+    id: 'standard',
+    name: '华辩标准赛制',
+    phases: [
+      { id: 'standard-1', name: '正方一辩立论', seconds: 180 },
+      { id: 'standard-2', name: '反方一辩立论', seconds: 180 },
+      { id: 'standard-3', name: '正方二辩驳立论', seconds: 150 },
+      { id: 'standard-4', name: '反方二辩驳立论', seconds: 150 },
+      { id: 'standard-5', name: '正方三辩质询', seconds: 120 },
+      { id: 'standard-6', name: '反方三辩质询', seconds: 120 },
+      { id: 'standard-7', name: '正方三辩质询小结', seconds: 90 },
+      { id: 'standard-8', name: '反方三辩质询小结', seconds: 90 },
+      { id: 'standard-9', name: '自由辩论', seconds: { pro: 240, con: 240 } },
+      { id: 'standard-10', name: '反方四辩总结陈词', seconds: 180 },
+      { id: 'standard-11', name: '正方四辩总结陈词', seconds: 180 },
+    ],
+  },
+  bp: {
+    id: 'bp',
+    name: '英国议会制 (BP)',
+    phases: [
+      { id: 'bp-1', name: '首相发言', seconds: 420 },
+      { id: 'bp-2', name: '反对党领袖发言', seconds: 420 },
+      { id: 'bp-3', name: '副首相发言', seconds: 420 },
+      { id: 'bp-4', name: '反对党副领袖发言', seconds: 420 },
+      { id: 'bp-5', name: '政府成员发言', seconds: 420 },
+      { id: 'bp-6', name: '反对党成员发言', seconds: 420 },
+      { id: 'bp-7', name: '政府党鞭总结', seconds: 240 },
+      { id: 'bp-8', name: '反对党党鞭总结', seconds: 240 },
+    ],
+  },
+};
+
 /** 提示音触发点（秒） */
 const CUE_THRESHOLDS = [30, 5, 0];
 /** 数字滚动动画时长，需与 styles.css 中 .glyph 的 transition 保持一致 */
@@ -787,6 +826,31 @@ async function importFormatFile() {
   await importFormatFromPath(path);
 }
 
+/**
+ * 处理「选择赛制」下拉：
+ * - standard / bp → 加载内置预设
+ * - custom → 打开系统文件框导入自定义 JSON
+ * 加载后把下拉复位到占位项，方便下次直接选择。
+ */
+async function applyFormatSelection() {
+  const value = dom.selectFormat.value;
+  if (!value) return;
+
+  if (value === 'custom') {
+    dom.selectFormat.value = '';
+    await importFormatFile();
+    return;
+  }
+
+  const preset = FORMAT_PRESETS[value];
+  dom.selectFormat.value = '';
+  if (!preset) return;
+
+  // 预设与自定义 JSON 共用同一条持久化通道：把环节写成 JSON 文本存进 formatJson
+  loadFormat(structuredClone(preset), { source: JSON.stringify(preset.phases) });
+  notify(`已加载赛制：${preset.name}（${preset.phases.length} 个环节）`);
+}
+
 /** 从指定路径导入辩词素材 */
 async function importScriptFromPath(path) {
   let text;
@@ -867,7 +931,7 @@ function cacheDom() {
   dom.btnToggle = document.getElementById('btnToggle');
   dom.btnReset = document.getElementById('btnReset');
   dom.btnSwap = document.getElementById('btnSwap');
-  dom.btnFormat = document.getElementById('btnFormat');
+  dom.selectFormat = document.getElementById('selectFormat');
   dom.btnScript = document.getElementById('btnScript');
   dom.btnWorkshop = document.getElementById('btnWorkshop');
   dom.btnAiWriter = document.getElementById('btnAiWriter');
@@ -880,8 +944,8 @@ function bindEvents() {
   dom.btnToggle.addEventListener('click', toggleTimer);
   dom.btnReset.addEventListener('click', resetTimer);
   dom.btnSwap.addEventListener('click', swapSides);
-  dom.btnFormat.addEventListener('click', () => {
-    void importFormatFile();
+  dom.selectFormat.addEventListener('change', () => {
+    void applyFormatSelection();
   });
   dom.btnScript.addEventListener('click', () => {
     void importScriptFile();
