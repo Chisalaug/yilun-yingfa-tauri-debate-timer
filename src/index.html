@@ -145,7 +145,12 @@
           <button class="btn btn-primary" id="btnToggle" type="button" data-state="idle">开始</button>
           <button class="btn" id="btnReset" type="button">重置</button>
           <button class="btn" id="btnSwap" type="button">交换正反方</button>
-          <button class="btn" id="btnFormat" type="button">导入赛制</button>
+          <select class="btn" id="selectFormat" style="appearance: none; -webkit-appearance: none; text-align: center; cursor: pointer; padding-right: 12px;">
+  <option value="" disabled selected hidden>选择赛制</option>
+  <option value="standard">华辩标准赛制</option>
+  <option value="bp">英国议会制 (BP)</option>
+  <option value="custom">导入自定义 JSON...</option>
+</select>
           <button class="btn" id="btnScript" type="button">导入辩词素材</button>
         </div>
         <div class="controls-row controls-row-sub">
@@ -185,11 +190,11 @@
           </article>
 
           <article class="help-page" data-page="1">
-            <h3>如何导入赛制与辩词</h3>
+            <h3>如何选择赛制与导入辩词</h3>
             <ul>
-              <li>导入赛制：点「导入赛制」，选一个 JSON 文件，格式是数组，例如 <code>[{"name":"立论","seconds":180}]</code>。</li>
-              <li>也支持双方不同时长：<code>{"name":"自由辩论","seconds":{"pro":240,"con":180}}</code>。</li>
-              <li>导入后环节列表出现在计时区上方，当前环节高亮，点击即可切换。</li>
+              <li>选择赛制：点底部「选择赛制」下拉，直接选「华辩标准赛制」或「英国议会制 (BP)」；选「导入自定义 JSON...」可导入自己的赛制文件。</li>
+              <li>自定义 JSON 格式是数组，例如 <code>[{"name":"立论","seconds":180}]</code>；也支持双方不同时长 <code>{"name":"自由辩论","seconds":{"pro":240,"con":180}}</code>。</li>
+              <li>加载后环节列表出现在计时区上方，当前环节高亮，点击即可切换。</li>
               <li>导入辩词：点「导入辩词素材」，选择 <code>.txt</code> 或 <code>.md</code>，文件会按空行切分成片段。</li>
               <li>片段保存在本机，供文案工坊使用；左下角显示「素材：已导入 N 个片段」。</li>
             </ul>
@@ -207,11 +212,11 @@
           </article>
 
           <article class="help-page" data-page="3">
-            <h3>如何使用 PPT 背景</h3>
+            <h3>如何使用 PPT / 图片背景</h3>
             <ul>
-              <li>点「导入 PPT 背景」，可以直接选 <code>.pdf</code>，也可以选 <code>.pptx</code>（需要本机安装 LibreOffice）。</li>
-              <li>PPT 会转成 PDF 铺满窗口作为背景，计时器 UI 浮在上面，文字保持可读。</li>
-              <li>用 <kbd>←</kbd> <kbd>→</kbd> 或点击画面左右半区翻页，右下角显示当前页码。</li>
+              <li>点「导入 PPT 背景」，可以选 <code>.pdf</code>、<code>.pptx</code>（需要本机安装 LibreOffice），或直接选一张图片（<code>.png / .jpg / .gif / .webp</code> 等）作为背景。</li>
+              <li>PPT / PDF 会铺满窗口作为背景，计时器 UI 浮在上面，文字保持可读；单张图片会铺满全屏。</li>
+              <li>PPT / PDF 用 <kbd>←</kbd> <kbd>→</kbd> 或点击画面左右半区翻页，右下角显示当前页码；图片无翻页。</li>
               <li>「背景设置」里可以调遮罩浓度 0–60%，并切换计时数字的黑 / 白描边。</li>
               <li>想恢复原样：打开「背景设置」点「移除背景」。</li>
             </ul>
