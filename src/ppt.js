@@ -1,13 +1,13 @@
 'use strict';
 
 /* ==========================================================================
- * PPT 背景
+ * PPT / 图片背景
  *
  * - 导入 .pptx → 走 Rust 命令 convert_pptx_to_pdf（本地 LibreOffice 转换 + 缓存）
- * - 导入 .pdf → 直接渲染
- * - pdfjs-dist 自托管在 src/vendor/pdfjs（worker 不走 CDN）
+ * - 导入 .pdf → 直接渲染（pdfjs-dist 自托管在 src/vendor/pdfjs，worker 不走 CDN）
+ * - 导入图片（.png/.jpg/.gif/.bmp/.webp/.svg）→ 直接铺满全屏作为背景
  * - 全屏 canvas 在 z-index: 0，计时器 UI 在 z-index: 10，中间是遮罩层
- * - ← / → 翻页，点击左 / 右半区也能翻
+ * - PDF/PPT ← / → 翻页，点击左 / 右半区也能翻；单张图片无翻页
  * ========================================================================== */
 
 import { open } from './vendor/dialog.js';
@@ -20,6 +20,18 @@ const CMAP_URL = new URL('./vendor/pdfjs/cmaps/', import.meta.url).href;
 const FONT_URL = new URL('./vendor/pdfjs/standard_fonts/', import.meta.url).href;
 
 const LIBREOFFICE_HINT = 'LibreOffice';
+
+/** 可作为背景直接导入的图片扩展名 */
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|bmp|webp|svg)$/i;
+const IMAGE_MIME = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+};
 
 export function initPpt({ state, persist, notify }) {
   const canvas = document.getElementById('pptCanvas');
@@ -39,6 +51,9 @@ export function initPpt({ state, persist, notify }) {
   let loadToken = 0;
   let renderToken = 0;
   let resizeTimer = 0;
+  /** 图片背景（HTMLImageElement 与 object URL），与 pdf 二选一 */
+  let image = null;
+  let imageUrl = null;
 
   function config() {
     if (!state.bgConfig) state.bgConfig = { dim: 15, stroke: 'black' };
@@ -98,17 +113,24 @@ export function initPpt({ state, persist, notify }) {
     if (pageLabel) pageLabel.textContent = `${pageNum} / ${pdf.numPages}`;
   }
 
-  async function openPdf(bytes) {
-    const token = ++loadToken;
-
+  /** 清空当前背景（PDF 与图片二选一），并作废进行中的加载 / 渲染 */
+  function clearSource() {
+    loadToken += 1;
+    renderToken += 1;
     if (pdf) {
-      try {
-        await pdf.destroy();
-      } catch {
-        /* 忽略销毁失败 */
-      }
+      void pdf.destroy().catch(() => {});
       pdf = null;
     }
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+      imageUrl = null;
+    }
+    image = null;
+  }
+
+  async function openPdf(bytes) {
+    clearSource();
+    const token = loadToken;
 
     const task = getDocument({
       data: bytes,
@@ -130,14 +152,72 @@ export function initPpt({ state, persist, notify }) {
     await renderPage();
   }
 
+  /** 图片背景：cover 铺满整个窗口，居中裁剪，无翻页 */
+  async function renderImage() {
+    if (!image) return;
+    const token = ++renderToken;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    canvas.width = Math.max(1, Math.floor(w * dpr));
+    canvas.height = Math.max(1, Math.floor(h * dpr));
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+
+    ctx.fillStyle = '#05070d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const scale = Math.max(w / image.naturalWidth, h / image.naturalHeight);
+    const dw = image.naturalWidth * scale * dpr;
+    const dh = image.naturalHeight * scale * dpr;
+    ctx.drawImage(image, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+    if (token !== renderToken) return;
+  }
+
+  async function openImage(bytes, ext) {
+    clearSource();
+    const token = loadToken;
+    const url = URL.createObjectURL(new Blob([bytes], { type: IMAGE_MIME[ext] || 'image/png' }));
+    imageUrl = url;
+
+    const img = new Image();
+    try {
+      await new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('无法解码图片，请换一张试试'));
+        img.src = url;
+      });
+    } catch (err) {
+      URL.revokeObjectURL(url);
+      imageUrl = null;
+      throw err;
+    }
+
+    if (token !== loadToken) {
+      URL.revokeObjectURL(url);
+      imageUrl = null;
+      return;
+    }
+
+    image = img;
+    document.body.classList.add('has-background');
+    if (pager) pager.hidden = true;
+    await renderImage();
+  }
+
   async function importFile() {
     let path;
     try {
       path = await open({
-        title: 'PPT / PDF 背景',
+        title: '背景文件（PPT / PDF / 图片）',
         multiple: false,
         directory: false,
-        filters: [{ name: 'PPT / PDF', extensions: ['pptx', 'pdf'] }],
+        filters: [
+          { name: '支持的文件', extensions: ['pptx', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'] },
+          { name: 'PDF / PPT', extensions: ['pdf', 'pptx'] },
+          { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'] },
+        ],
       });
     } catch {
       notify('无法打开文件选择框');
@@ -148,18 +228,25 @@ export function initPpt({ state, persist, notify }) {
     if (Array.isArray(path)) path = path[0];
 
     try {
-      if (/\.pdf$/i.test(path)) {
+      if (IMAGE_EXT_RE.test(path)) {
+        setLoading('正在读取图片…');
+        const bytes = await readFile(path);
+        setLoading('正在渲染…');
+        await openImage(bytes, path.split('.').pop().toLowerCase());
+        notify('图片背景已加载');
+      } else if (/\.pdf$/i.test(path)) {
         setLoading('正在读取 PDF…');
         const bytes = await readFile(path);
         setLoading('正在渲染…');
         await openPdf(bytes);
+        notify('背景已加载，可用 ← → 翻页');
       } else {
         setLoading('正在转换 PPT（首次需要几秒）…');
         const raw = await invoke('convert_pptx_to_pdf', { pptxPath: path });
         setLoading('正在渲染…');
         await openPdf(new Uint8Array(raw));
+        notify('背景已加载，可用 ← → 翻页');
       }
-      notify('背景已加载，可用 ← → 翻页');
     } catch (err) {
       const message = typeof err === 'string' ? err : (err && err.message) || '';
       notify(
@@ -173,12 +260,7 @@ export function initPpt({ state, persist, notify }) {
   }
 
   function removeBackground() {
-    loadToken += 1;
-    renderToken += 1;
-    if (pdf) {
-      void pdf.destroy().catch(() => {});
-      pdf = null;
-    }
+    clearSource();
     document.body.classList.remove('has-background');
     if (pager) pager.hidden = true;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -199,7 +281,7 @@ export function initPpt({ state, persist, notify }) {
 
   function openSettings() {
     applyConfig();
-    if (removeBtn) removeBtn.disabled = !pdf;
+    if (removeBtn) removeBtn.disabled = !pdf && !image;
     overlay.hidden = false;
     document.body.classList.add('modal-open');
   }
@@ -279,10 +361,11 @@ export function initPpt({ state, persist, notify }) {
   });
 
   window.addEventListener('resize', () => {
-    if (!pdf) return;
+    if (!pdf && !image) return;
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      void renderPage();
+      if (pdf) void renderPage();
+      else if (image) void renderImage();
     }, 180);
   });
 
@@ -293,7 +376,7 @@ export function initPpt({ state, persist, notify }) {
     openSettings,
     applyConfig,
     removeBackground,
-    hasBackground: () => Boolean(pdf),
+    hasBackground: () => Boolean(pdf) || Boolean(image),
     go,
   };
 }
