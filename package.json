@@ -1,0 +1,22 @@
+{
+  "name": "cizhilou-debate-timer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "vendor": "node scripts/vendor.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-fs": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-store": "^2",
+    "pdfjs-dist": "^4.8.69"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
