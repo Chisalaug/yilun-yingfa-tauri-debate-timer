@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>辞之漏辩论计时器</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="main.js"></script>
+  </head>
+
+  <body>
+    <!-- PPT 背景层（z-index: 0），计时器 UI 在 .app（z-index: 10） -->
+    <canvas class="ppt-canvas" id="pptCanvas" aria-hidden="true"></canvas>
+    <div class="ppt-dim" id="pptDim" aria-hidden="true"></div>
+    <div class="ppt-pager" id="pptPager" hidden>
+      <span id="pptPageLabel">1 / 1</span>
+      <span class="ppt-pager-hint">← → 翻页</span>
+    </div>
+    <div class="ppt-loading" id="pptLoading" hidden></div>
+
+    <!-- ===================== 欢迎页 ===================== -->
+    <section class="screen screen-welcome is-active" id="welcomeScreen">
+      <div class="welcome-halo" aria-hidden="true"></div>
+      <div class="welcome-card">
+        <div class="welcome-mark" aria-hidden="true">辞</div>
+        <h1 class="welcome-title">欢迎使用<br />辞之漏辩论计时器</h1>
+        <p class="welcome-sub">双栏计时 · 赛制导入 · 文案工坊 · PPT 背景</p>
+        <div class="welcome-actions">
+          <button class="btn btn-primary btn-lg" id="btnStartApp" type="button">立即使用</button>
+          <button class="btn btn-lg" id="btnOpenHelpFromWelcome" type="button">查看教程</button>
+        </div>
+        <p class="welcome-foot">按 Space 开始计时 · 按 ← → 翻 PPT</p>
+      </div>
+    </section>
+
+    <div class="app screen" id="mainScreen" hidden>
+      <!-- ===================== 顶部：辩题 + 队名 ===================== -->
+      <header class="topbar" id="topbar">
+        <div class="topbar-head">
+          <button
+            class="topic-toggle"
+            id="topicToggle"
+            type="button"
+            aria-expanded="true"
+            aria-controls="topicPanel"
+          >
+            <svg class="chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path
+                d="M4 6l4 4 4-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>辩题</span>
+          </button>
+          <span class="topic-preview is-empty" id="topicPreview">未设置辩题</span>
+        </div>
+
+        <div class="topic-panel" id="topicPanel">
+          <div class="topic-inner">
+            <input
+              class="topic-input"
+              id="topicInput"
+              type="text"
+              maxlength="60"
+              placeholder="例如：网络让人更自由，还是更不自由？"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+        </div>
+
+        <div class="team-row">
+          <label class="team-field team-field-pro">
+            <span class="team-field-label">正方队名</span>
+            <input
+              class="team-input"
+              data-team-input="pro"
+              type="text"
+              maxlength="16"
+              value="正方"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <span class="team-vs" aria-hidden="true">VS</span>
+          <label class="team-field team-field-con">
+            <span class="team-field-label">反方队名</span>
+            <input
+              class="team-input"
+              data-team-input="con"
+              type="text"
+              maxlength="16"
+              value="反方"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </div>
+      </header>
+
+      <!-- ===================== 中央：双栏倒计时 ===================== -->
+      <main class="stage" id="stage">
+        <div class="stage-head">
+          <div class="phase-list" id="phaseList" role="tablist" aria-label="环节列表"></div>
+        </div>
+
+        <div class="panels">
+          <section class="panel" data-panel="pro" data-side="pro">
+            <header class="panel-head">
+              <span class="side-tag">正方</span>
+              <h2 class="team-name" data-team="pro">正方</h2>
+            </header>
+            <div class="time" data-time="pro" role="timer" aria-label="正方剩余时间"></div>
+            <div class="panel-foot">
+              <span class="status" data-status="pro">就绪</span>
+              <div class="progress" aria-hidden="true">
+                <span class="progress-fill" data-progress="pro"></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" data-panel="con" data-side="con">
+            <header class="panel-head">
+              <span class="side-tag">反方</span>
+              <h2 class="team-name" data-team="con">反方</h2>
+            </header>
+            <div class="time" data-time="con" role="timer" aria-label="反方剩余时间"></div>
+            <div class="panel-foot">
+              <span class="status" data-status="con">就绪</span>
+              <div class="progress" aria-hidden="true">
+                <span class="progress-fill" data-progress="con"></span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <!-- ===================== 底部：控制栏 ===================== -->
+      <footer class="controls">
+        <div class="controls-row">
+          <button class="btn btn-primary" id="btnToggle" type="button" data-state="idle">开始</button>
+          <button class="btn" id="btnReset" type="button">重置</button>
+          <button class="btn" id="btnSwap" type="button">交换正反方</button>
+          <button class="btn" id="btnFormat" type="button">导入赛制</button>
+          <button class="btn" id="btnScript" type="button">导入辩词素材</button>
+        </div>
+        <div class="controls-row controls-row-sub">
+          <span class="script-status" id="scriptStatus">素材：未导入</span>
+          <div class="controls-ai">
+            <button class="btn btn-ghost" id="btnAiWriter" type="button">AI 写辩词</button>
+            <button class="btn btn-ghost" id="btnWorkshop" type="button">文案工坊</button>
+            <button class="btn btn-ghost" id="btnPptImport" type="button">导入 PPT 背景</button>
+            <button class="btn btn-ghost" id="btnPptSettings" type="button">背景设置</button>
+            <button class="btn btn-ghost" id="btnAiPpt" type="button">AI 生成 PPT</button>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- ===================== 帮助页 ===================== -->
+    <section class="screen screen-help" id="helpScreen" hidden>
+      <div class="help-shell">
+        <header class="help-head">
+          <div class="help-titles">
+            <span class="help-kicker">新手指南</span>
+            <h2 class="help-title">辞之漏辩论计时器</h2>
+          </div>
+          <button class="help-close" id="helpClose" type="button" aria-label="关闭帮助">×</button>
+        </header>
+
+        <div class="help-viewport" id="helpViewport" data-dir="forward">
+          <article class="help-page is-active" data-page="0">
+            <h3>如何使用计时器</h3>
+            <ul>
+              <li>顶部填写辩题与正反方队名，中央左右两栏分别是两队的剩余时间。</li>
+              <li>点「开始」或按 <kbd>Space</kbd> 启动，双方各自独立倒计时；再次点击即暂停。</li>
+              <li>剩余 30 秒、5 秒与归零时会响提示音；归零的一栏停在 00:00.0 并变红。</li>
+              <li>「重置」回到当前环节预设时长，「交换正反方」互换两队的名字与剩余时间。</li>
+              <li>点环节芯片可切换立论、驳论、自由辩论等，切换会停表并加载新时长。</li>
+            </ul>
+          </article>
+
+          <article class="help-page" data-page="1">
+            <h3>如何导入赛制与辩词</h3>
+            <ul>
+              <li>导入赛制：点「导入赛制」，选一个 JSON 文件，格式是数组，例如 <code>[{"name":"立论","seconds":180}]</code>。</li>
+              <li>也支持双方不同时长：<code>{"name":"自由辩论","seconds":{"pro":240,"con":180}}</code>。</li>
+              <li>导入后环节列表出现在计时区上方，当前环节高亮，点击即可切换。</li>
+              <li>导入辩词：点「导入辩词素材」，选择 <code>.txt</code> 或 <code>.md</code>，文件会按空行切分成片段。</li>
+              <li>片段保存在本机，供文案工坊使用；左下角显示「素材：已导入 N 个片段」。</li>
+            </ul>
+          </article>
+
+          <article class="help-page" data-page="2">
+            <h3>如何使用文案工坊</h3>
+            <ul>
+              <li>点「文案工坊」打开工作台，左侧是已导入的辩词片段。</li>
+              <li>第一次使用先点「接口设置」，填 Base URL、API Key 与模型（如 <code>https://api.deepseek.com/v1</code> 与 <code>deepseek-chat</code>）。</li>
+              <li>选中片段，输入写作指令（「压缩到 80 字」「改为质询口吻」），点「处理」。</li>
+              <li>生成内容逐字流式出现；点「接受」替换原文，点「撤销」回退到替换前。</li>
+              <li>请求由 Rust 发出，Key 只保存在本机应用数据里。</li>
+            </ul>
+          </article>
+
+          <article class="help-page" data-page="3">
+            <h3>如何使用 PPT 背景</h3>
+            <ul>
+              <li>点「导入 PPT 背景」，可以直接选 <code>.pdf</code>，也可以选 <code>.pptx</code>（需要本机安装 LibreOffice）。</li>
+              <li>PPT 会转成 PDF 铺满窗口作为背景，计时器 UI 浮在上面，文字保持可读。</li>
+              <li>用 <kbd>←</kbd> <kbd>→</kbd> 或点击画面左右半区翻页，右下角显示当前页码。</li>
+              <li>「背景设置」里可以调遮罩浓度 0–60%，并切换计时数字的黑 / 白描边。</li>
+              <li>想恢复原样：打开「背景设置」点「移除背景」。</li>
+            </ul>
+          </article>
+
+          <article class="help-page" data-page="4">
+            <h3>如何使用 AI 工具</h3>
+            <ul>
+              <li>「AI 写辩词」提供豆包、DeepSeek、通义千问三份提示词，复制后到网页版粘贴使用。</li>
+              <li>「AI 生成 PPT」提供 Gamma、夸克 PPT、豆包，适合先生成大纲或整套幻灯片。</li>
+              <li>每张卡片底部的「去网页版」会用系统浏览器打开对应网站。</li>
+              <li>应用不调用这些服务的接口，也不保存你的对话内容。</li>
+              <li>生成好的 PPT 导出为 PDF 后，可用「导入 PPT 背景」带回本应用。</li>
+            </ul>
+          </article>
+        </div>
+
+        <footer class="help-foot">
+          <span class="help-progress" id="helpProgress">1 / 5</span>
+          <div class="help-actions">
+            <button class="btn" id="helpPrev" type="button" disabled>上一页</button>
+            <button class="btn btn-primary" id="helpNext" type="button">下一页</button>
+          </div>
+        </footer>
+      </div>
+    </section>
+
+    <button class="fab" id="helpFab" type="button" aria-label="打开帮助" hidden>?</button>
+
+    <!-- ===================== 文案工坊 ===================== -->
+    <div class="overlay" id="workshopOverlay" hidden>
+      <section class="workshop" role="dialog" aria-modal="true" aria-labelledby="workshopTitle">
+        <header class="workshop-head">
+          <div class="workshop-title">
+            <h2 id="workshopTitle">文案工坊</h2>
+            <span class="workshop-sub">选片段 → 写指令 → 流式改写</span>
+          </div>
+          <div class="workshop-head-actions">
+            <button class="btn btn-ghost" id="btnLlmSettings" type="button">接口设置</button>
+            <button class="btn btn-ghost" id="btnWorkshopClose" type="button">关闭</button>
+          </div>
+        </header>
+
+        <div class="workshop-body">
+          <aside class="segment-pane">
+            <div class="pane-title">
+              <span>辩词片段</span>
+              <span class="pane-count" id="segmentCount">0</span>
+            </div>
+            <ul class="segment-list" id="segmentList"></ul>
+            <p class="pane-empty" id="segmentEmpty">还没有素材，先回主界面点「导入辩词素材」。</p>
+          </aside>
+
+          <section class="editor-pane">
+            <div class="editor-empty" id="editorEmpty">
+              <p>从左侧选择一个片段开始改写</p>
+            </div>
+
+            <div class="editor-body" id="editorBody" hidden>
+              <div class="field-block">
+                <div class="field-label-row">
+                  <span class="field-label">原文</span>
+                  <span class="field-meta" id="originMeta"></span>
+                </div>
+                <div class="origin-text" id="originText"></div>
+              </div>
+
+              <label class="field-block">
+                <span class="field-label">写作指令</span>
+                <textarea
+                  id="instructionInput"
+                  rows="2"
+                  placeholder="例如：压缩到 80 字 / 改为质询口吻"
+                ></textarea>
+              </label>
+
+              <div class="editor-actions">
+                <button class="btn btn-primary" id="btnProcess" type="button">处理</button>
+                <span class="editor-status" id="editorStatus"></span>
+              </div>
+
+              <div class="field-block">
+                <div class="field-label-row">
+                  <span class="field-label">生成结果</span>
+                  <span class="field-meta" id="resultMeta"></span>
+                </div>
+                <div class="result-text" id="resultText"></div>
+              </div>
+
+              <div class="editor-actions">
+                <button class="btn" id="btnAccept" type="button" disabled>接受</button>
+                <button class="btn" id="btnUndo" type="button" disabled>撤销</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================== 接口设置 ===================== -->
+    <div class="overlay" id="settingsOverlay" hidden>
+      <section class="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <header class="settings-head">
+          <h2 id="settingsTitle">接口设置</h2>
+          <p class="settings-sub">请求全部由 Rust 发出，Key 只存在本机应用数据里</p>
+        </header>
+
+        <div class="settings-body">
+          <label class="field-block">
+            <span class="field-label">Base URL</span>
+            <input
+              id="cfgBaseUrl"
+              type="url"
+              placeholder="https://api.deepseek.com/v1"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+
+          <label class="field-block">
+            <span class="field-label">API Key</span>
+            <input id="cfgApiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+          </label>
+
+          <label class="field-block">
+            <span class="field-label">模型</span>
+            <input id="cfgModel" type="text" placeholder="deepseek-chat" autocomplete="off" spellcheck="false" />
+          </label>
+
+          <p class="settings-hint">
+            保存在应用数据目录的 debate-store.json 中；不会写入 localStorage，也不会出现在日志里。
+          </p>
+        </div>
+
+        <footer class="settings-foot">
+          <button class="btn btn-ghost" id="btnSettingsCancel" type="button">取消</button>
+          <button class="btn btn-primary" id="btnSettingsSave" type="button">保存</button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- ===================== 背景设置 ===================== -->
+    <div class="overlay" id="bgOverlay" hidden>
+      <section class="settings" role="dialog" aria-modal="true" aria-labelledby="bgTitle">
+        <header class="settings-head">
+          <h2 id="bgTitle">背景设置</h2>
+          <p class="settings-sub">遮罩与描边只影响显示，不影响计时</p>
+        </header>
+
+        <div class="settings-body">
+          <label class="field-block">
+            <span class="field-label-row">
+              <span class="field-label">遮罩浓度</span>
+              <span class="field-meta" id="bgDimValue">15%</span>
+            </span>
+            <input id="bgDim" type="range" min="0" max="60" step="1" value="15" />
+          </label>
+
+          <div class="field-block">
+            <span class="field-label">文字描边</span>
+            <div class="segmented" id="bgStroke">
+              <button type="button" data-stroke="black" class="is-active">黑色</button>
+              <button type="button" data-stroke="white">白色</button>
+            </div>
+          </div>
+
+          <button class="btn" id="bgRemove" type="button">移除背景</button>
+        </div>
+
+        <footer class="settings-foot">
+          <button class="btn btn-ghost" id="bgClose" type="button">关闭</button>
+        </footer>
+      </section>
+    </div>
+
+    <!-- ===================== AI 写辩词 ===================== -->
+    <div class="ai-modal-wrap" id="writerModal" hidden>
+      <div class="ai-modal-backdrop" id="writerBackdrop"></div>
+      <section class="ai-modal" role="dialog" aria-modal="true" aria-labelledby="writerTitle">
+        <header class="ai-modal-head">
+          <div class="ai-modal-titles">
+            <h2 id="writerTitle">AI 写辩词</h2>
+            <p class="ai-modal-sub">复制教程文本，粘贴到对应网页版即可</p>
+          </div>
+          <button class="ai-modal-close" id="writerClose" type="button" aria-label="关闭">×</button>
+        </header>
+        <div class="ai-modal-body" id="writerCards"></div>
+      </section>
+    </div>
+
+    <!-- ===================== AI 生成 PPT ===================== -->
+    <div class="ai-modal-wrap" id="pptAiModal" hidden>
+      <div class="ai-modal-backdrop" id="pptAiBackdrop"></div>
+      <section class="ai-modal" role="dialog" aria-modal="true" aria-labelledby="pptAiTitle">
+        <header class="ai-modal-head">
+          <div class="ai-modal-titles">
+            <h2 id="pptAiTitle">AI 生成 PPT</h2>
+            <p class="ai-modal-sub">先生成初稿，再导出 PPTX / PDF 作为背景</p>
+          </div>
+          <button class="ai-modal-close" id="pptAiClose" type="button" aria-label="关闭">×</button>
+        </header>
+        <div class="ai-modal-body" id="pptAiCards"></div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
