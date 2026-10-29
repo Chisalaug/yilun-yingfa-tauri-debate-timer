@@ -1,26 +1,36 @@
 name: Build Tauri Release
+
 on:
   push:
     tags:
-      - 'v*'  # 只有推送v开头tag（v0.1.0这种）才打包发布
-  workflow_dispatch: # 网页上可以手动点按钮触发打包（测试非常方便）
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: write  # 直接在yml里写死读写权限，防止忘记在仓库设置开启
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: 'npm'
+
       - name: Install dependencies
         run: npm install
+
       - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Yilun Yingfa Timer ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
